@@ -11,6 +11,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 @SpringBootTest
 class ChatServiceApplicationTest {
 
+    /** Der vollstaendige Anwendungskontext muss sich ohne fehlende Beans starten lassen. */
     @Test
     void contextLoads() {
         // Kein Inhalt noetig - der Test besteht darin, dass @SpringBootTest oben durchlaeuft.

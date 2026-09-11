@@ -35,6 +35,8 @@ erreichbar.
 
 ## Dokumente
 
+- [`docs/UMSETZUNG.md`](docs/UMSETZUNG.md) — umgesetzte Anforderungen, Erklärungen,
+  Testergebnisse und noch offene Live-Prüfungen.
 - [`PLANUNG.md`](PLANUNG.md) — Stack, Architektur, Nachrichtenfluss, Datenmodell, offene Punkte.
   Das ist die Grundlage für alles Weitere.
 - [`docs/design/2026-08-28-chat-app-architektur.html`](docs/design/2026-08-28-chat-app-architektur.html)
@@ -59,5 +61,47 @@ Die vollständigen Regeln stehen in [`CLAUDE.md`](CLAUDE.md).
 
 ## Stand
 
-Das Repository enthält im Moment die Planung und die Dokumente. Der Code entsteht im Unterricht
-entlang des Bootstrap-Plans, Task für Task.
+Der Bootstrap ist implementiert: `chat-service` liest den Verlauf aus PostgreSQL und
+publiziert neue Nachrichten auf den RabbitMQ-Fanout-Exchange `chat.messages`.
+
+## Lokal starten
+
+Docker Desktop starten, danach im Projektverzeichnis:
+
+```bash
+docker compose up -d
+cd chat-service
+mvn test
+mvn spring-boot:run
+```
+
+- [Swagger UI](http://localhost:8080/swagger-ui.html): GET und POST ausprobieren.
+- [Health](http://localhost:8080/actuator/health): Zustand von Datenbank und Broker.
+- [RabbitMQ](http://localhost:15672): Benutzer `chat`, Passwort `chat`.
+- Demo-Raum: `11111111-1111-1111-1111-111111111111`, mit drei Nachrichten.
+
+`GET /api/messages?roomId=11111111-1111-1111-1111-111111111111` liefert den Verlauf,
+neueste Nachricht zuerst. `limit` ist optional (Standard 50, erlaubt 1 bis 100).
+`POST /api/messages` erwartet beispielsweise:
+
+```json
+{
+  "roomId": "11111111-1111-1111-1111-111111111111",
+  "sender": "lernende1",
+  "text": "Hallo zusammen"
+}
+```
+
+Die Antwort ist `202 Accepted`; UUID und Sendezeit vergibt der Server.
+Der Absender ist bis zur Keycloak-Erweiterung ein Platzhalter. Der Bootstrap enthält
+noch keinen Login, keine Live-Anzeige und keinen schreibenden Batch-Service.
+Gesendete Nachrichten erscheinen deshalb noch nicht im Datenbankverlauf.
+
+Für den Broker-Test zuerst in RabbitMQ eine Queue `test.listen` anlegen und an
+`chat.messages` binden. Ohne gebundene Queue verwirft der Exchange Nachrichten.
+Nach einem POST lässt sich das JSON über «Get messages» in der Queue kontrollieren.
+Die Test-Queue anschliessend löschen.
+
+Die SQL-Dateien unter `db/` werden nur beim ersten Start mit leerem Datenbankvolume
+ausgeführt. `docker compose stop` stoppt die Infrastruktur und erhält die Daten.
+Die veröffentlichten Datenbank- und Broker-Ports gehören zur lokalen Bootstrap-Phase.
