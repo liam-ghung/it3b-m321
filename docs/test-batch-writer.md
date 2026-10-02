@@ -32,6 +32,17 @@ Duplikate, Teilstapel, 1000er-Rückstau, ungültiges JSON, SQL-Datenfehler mit g
 Nachbarn und 15 Sekunden eingefrorene Datenbank mit automatischer Erholung.
 Der komplette Container-Neustart wird zusätzlich in S7 geprüft.
 
+## Zusätzlicher Start aus frischem Klon
+
+Nach dem Test-Commit `daf6522` wurde mit `git clone --no-hardlinks` ein neuer lokaler
+Klon erstellt. Er enthält nur versionierte Dateien. Darin wurde `.env` neu aus
+`.env.example` erstellt und `docker compose -p m321-fresh up -d --build` ausgeführt.
+Beide Images wurden erfolgreich gebaut; Docker legte neue, leere Datenvolumes an.
+`python scripts/acceptance.py S2 --project m321-fresh` bestand mit allen vier
+Diensten, Health UP und null veröffentlichten Ports. S3–S8 wurden bereits am
+identischen Programmcode im obigen Lauf geprüft. Dieser zusätzliche Dokumentations-
+Commit hält die erst nach dem Klonen vorliegende Bestätigung fest.
+
 ## Grenzen und Abgabe
 
 Die mündliche Erklärung bleibt Teil der Bewertung. Eine Vorbereitung steht in
