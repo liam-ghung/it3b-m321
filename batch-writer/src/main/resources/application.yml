@@ -1,0 +1,24 @@
+spring:
+  application:
+    name: batch-writer
+  main:
+    web-application-type: none
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:chat}?reWriteBatchedInserts=true&connectTimeout=2&socketTimeout=5
+    username: ${POSTGRES_USER:chat}
+    password: ${POSTGRES_PASSWORD:chat-local-only}
+    hikari:
+      maximum-pool-size: 2
+      minimum-idle: 0
+      connection-timeout: 2000
+      validation-timeout: 1000
+      initialization-fail-timeout: -1
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:chat}
+    password: ${RABBITMQ_PASSWORD:chat-local-only}
+batch:
+  size: ${BATCH_SIZE:100}
+  timeout-ms: ${BATCH_TIMEOUT_MS:200}
+  retry-delay-ms: ${RETRY_DELAY_MS:2000}

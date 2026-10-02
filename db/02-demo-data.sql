@@ -8,10 +8,10 @@ INSERT INTO room_member (room_id, username, invited_by, joined_at) VALUES
   ('11111111-1111-1111-1111-111111111111', 'lehrperson', 'lehrperson', now()),
   ('11111111-1111-1111-1111-111111111111', 'lernende1',  'lehrperson', now());
 
-INSERT INTO message (id, room_id, sender, text, sent_at) VALUES
+INSERT INTO message (id, room_id, sender_id, sender_name, content, sent_at) VALUES
   ('aaaaaaaa-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111',
-   'lehrperson', 'Willkommen im Raum Allgemein.',     now() - interval '3 minutes'),
+   'lehrperson', 'lehrperson', 'Willkommen im Raum Allgemein.',     now() - interval '3 minutes'),
   ('aaaaaaaa-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111',
-   'lernende1',  'Danke, der Verlauf wird gelesen.',  now() - interval '2 minutes'),
+   'lernende1', 'lernende1', 'Danke, der Verlauf wird gelesen.',  now() - interval '2 minutes'),
   ('aaaaaaaa-0000-0000-0000-000000000003', '11111111-1111-1111-1111-111111111111',
-   'lehrperson', 'Genau, geschrieben wird spaeter.',  now() - interval '1 minute');
+   'lehrperson', 'lehrperson', 'Jetzt speichert der Batch-Writer.', now() - interval '1 minute');

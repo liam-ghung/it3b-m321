@@ -22,9 +22,11 @@ CREATE TABLE message (
     -- Die ID kommt vom chat-service, NICHT von der Datenbank. Nur so kann der
     -- batch-service ein Paket gefahrlos wiederholen (ON CONFLICT DO NOTHING).
     id       UUID         PRIMARY KEY,
-    room_id  UUID         NOT NULL REFERENCES room (id),
-    sender   VARCHAR(100) NOT NULL,
-    text     TEXT         NOT NULL,
+    -- Raumverwaltung ist nicht Teil der Bewertung; beliebige Raum-UUIDs sind erlaubt.
+    room_id  UUID         NOT NULL,
+    sender_id VARCHAR(255) NOT NULL,
+    sender_name VARCHAR(255) NOT NULL,
+    content  TEXT         NOT NULL,
     -- Zeitpunkt des SENDENS, gesetzt vom chat-service. Absichtlich kein DEFAULT now():
     -- sonst haetten alle 500 Nachrichten eines Pakets dieselbe Zeit.
     sent_at  TIMESTAMPTZ  NOT NULL
