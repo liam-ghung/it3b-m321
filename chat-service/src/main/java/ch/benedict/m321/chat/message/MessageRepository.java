@@ -40,7 +40,7 @@ public class MessageRepository {
      * Der Index aus 01-schema.sql passt genau auf diese Abfrage.
      */
     public List<Message> findLatest(UUID roomId, int limit) {
-        String sql = "SELECT id, room_id, sender, text, sent_at "
+        String sql = "SELECT id, room_id, sender_id, sender_name, content, sent_at "
                    + "FROM message "
                    + "WHERE room_id = ? "
                    + "ORDER BY sent_at DESC "
@@ -63,10 +63,11 @@ public class MessageRepository {
     private Message mapRow(ResultSet row, int rowNumber) throws SQLException {
         UUID id = row.getObject("id", UUID.class);
         UUID roomId = row.getObject("room_id", UUID.class);
-        String sender = row.getString("sender");
-        String text = row.getString("text");
+        String senderId = row.getString("sender_id");
+        String senderName = row.getString("sender_name");
+        String content = row.getString("content");
         Timestamp timestamp = row.getTimestamp("sent_at");
         Instant sentAt = timestamp.toInstant();
-        return new Message(id, roomId, sender, text, sentAt);
+        return new Message(id, roomId, senderId, senderName, content, sentAt);
     }
 }

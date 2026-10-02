@@ -26,7 +26,7 @@ import org.springframework.web.server.ResponseStatusException;
  * Was hier nicht beschrieben ist, taucht in der Dokumentation auch nicht auf.
  */
 @RestController
-@RequestMapping("/api/messages")
+@RequestMapping({"/api/messages", "/messages"})
 @Tag(name = "Nachrichten", description = "Nachrichten senden und den Verlauf eines Raums lesen")
 public class MessageController {
 
@@ -107,6 +107,12 @@ public class MessageController {
         if (incoming.text() == null || incoming.text().isBlank()) {
             log.warn("Sendeanfrage mit leerem Text fuer Raum {} abgelehnt", incoming.roomId());
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "text darf nicht leer sein");
+        }
+
+        if (incoming.senderName().isBlank() || incoming.senderName().length() > 255
+                || incoming.senderId().length() > 255) {
+            log.warn("Sendeanfrage mit ungueltigem Absendernamen abgelehnt");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Absender ungueltig (maximal 255 Zeichen)");
         }
 
         Message published = messageService.sendMessage(incoming);

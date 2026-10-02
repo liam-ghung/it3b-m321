@@ -54,8 +54,8 @@ public class MessageService {
         // Die Datenbank wuerde spaeter den Moment des SCHREIBENS festhalten.
         Instant sentAt = Instant.now();
 
-        Message message = new Message(id, incoming.roomId(), incoming.sender(),
-                incoming.text(), sentAt);
+        Message message = new Message(id, incoming.roomId(), incoming.senderId(),
+                incoming.senderName(), incoming.content(), sentAt);
 
         log.info("Nachricht {} von {} fuer Raum {} wird publiziert",
                 id, incoming.sender(), incoming.roomId());

@@ -1,6 +1,7 @@
 package ch.benedict.m321.chat.message;
 
 import java.util.UUID;
+import com.fasterxml.jackson.annotation.JsonAlias;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -18,8 +19,32 @@ public record NewMessage(
         @Schema(description = "PLATZHALTER bis Keycloak da ist. Danach kommt der Absender "
                             + "aus dem Token und dieses Feld faellt ersatzlos weg.",
                 example = "lernende1")
-        String sender,
+        @JsonAlias("sender") String senderId,
+
+        @Schema(description = "Anzeigename des Absenders") String senderName,
 
         @Schema(description = "Der Nachrichtentext", example = "Hallo zusammen")
-        String text) {
+        @JsonAlias("text") String content) {
+
+    /** Ohne separaten Anzeigenamen dient wie beim Bootstrap die ID als Name. */
+    public NewMessage {
+        if (senderName == null) {
+            senderName = senderId;
+        }
+    }
+
+    /** Erhaelt bestehende Java-Aufrufer aus dem Bootstrap. */
+    public NewMessage(UUID roomId, String sender, String text) {
+        this(roomId, sender, sender, text);
+    }
+
+    /** Alte Aufrufer erhalten weiterhin die Absender-ID. */
+    public String sender() {
+        return senderId;
+    }
+
+    /** Alte Aufrufer erhalten weiterhin den Inhalt. */
+    public String text() {
+        return content;
+    }
 }

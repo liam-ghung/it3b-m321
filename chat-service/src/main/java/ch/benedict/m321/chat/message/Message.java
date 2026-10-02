@@ -12,7 +12,23 @@ import java.util.UUID;
 public record Message(
         UUID id,
         UUID roomId,
-        String sender,
-        String text,
+        String senderId,
+        String senderName,
+        String content,
         Instant sentAt) {
+
+    /** Erhaelt Java-Aufrufer aus dem Bootstrap mit nur einem Absendernamen. */
+    public Message(UUID id, UUID roomId, String sender, String text, Instant sentAt) {
+        this(id, roomId, sender, sender, text, sentAt);
+    }
+
+    /** Alte Java-Aufrufer koennen den Anzeigenamen weiterhin lesen. */
+    public String sender() {
+        return senderName;
+    }
+
+    /** Alte Java-Aufrufer koennen den Inhalt weiterhin lesen. */
+    public String text() {
+        return content;
+    }
 }

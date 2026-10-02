@@ -54,8 +54,8 @@ class MessageControllerTest {
 
         mockMvc.perform(get("/api/messages").param("roomId", ROOM_ID.toString()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].sender").value("lehrperson"))
-                .andExpect(jsonPath("$[0].text").value("Willkommen im Raum Allgemein."));
+                .andExpect(jsonPath("$[0].senderName").value("lehrperson"))
+                .andExpect(jsonPath("$[0].content").value("Willkommen im Raum Allgemein."));
     }
     /** Angenommene Nachrichten liefern 202 mit der vom Server vergebenen ID. */
     @Test
@@ -83,7 +83,7 @@ class MessageControllerTest {
                         .content(body))
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.id").value("bbbbbbbb-0000-0000-0000-000000000001"))
-                .andExpect(jsonPath("$.text").value("Hallo zusammen"));
+                .andExpect(jsonPath("$.content").value("Hallo zusammen"));
     }
 
     /** Leerzeichen gelten nicht als Nachricht und werden vor dem Senden abgelehnt. */
@@ -129,5 +129,20 @@ class MessageControllerTest {
                         .content(body))
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(messageService);
+    }
+    /** Der Bewertungsendpunkt nimmt den vollstaendigen neuen Vertrag entgegen. */
+    @Test
+    void evaluationEndpointAcceptsCanonicalContract() throws Exception {
+        Message created = new Message(UUID.randomUUID(), ROOM_ID, "student-1",
+                "Lernende 1", "Hallo", Instant.now());
+        when(messageService.sendMessage(any())).thenReturn(created);
+        String body = """
+                {"roomId":"11111111-1111-1111-1111-111111111111",
+                 "senderId":"student-1","senderName":"Lernende 1","content":"Hallo"}
+                """;
+        mockMvc.perform(post("/messages").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isAccepted());
+        org.mockito.Mockito.verify(messageService).sendMessage(
+                new NewMessage(ROOM_ID, "student-1", "Lernende 1", "Hallo"));
     }
 }

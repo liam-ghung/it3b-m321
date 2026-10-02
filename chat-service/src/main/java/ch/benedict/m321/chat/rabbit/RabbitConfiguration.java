@@ -2,6 +2,10 @@ package ch.benedict.m321.chat.rabbit;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.amqp.core.FanoutExchange;
+import org.springframework.amqp.core.Queue;
+import org.springframework.amqp.core.Binding;
+import java.util.HashMap;
+import java.util.Map;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -18,6 +22,27 @@ public class RabbitConfiguration {
 
     /** Name des Exchange, auf den jede neue Nachricht publiziert wird. */
     public static final String EXCHANGE_NAME = "chat.messages";
+
+    /** Die dauerhafte Queue nimmt auch bei gestopptem Writer Nachrichten entgegen. */
+    @Bean
+    public Queue persistQueue() {
+        Map<String, Object> arguments = new HashMap<>();
+        arguments.put("x-dead-letter-exchange", "");
+        arguments.put("x-dead-letter-routing-key", "chat.dlq");
+        return new Queue("chat.persist", true, false, false, arguments);
+    }
+
+    /** Endgueltig abgelehnte Nachrichten bleiben zur Untersuchung erhalten. */
+    @Bean
+    public Queue deadLetterQueue() {
+        return new Queue("chat.dlq", true);
+    }
+
+    /** Verbindet den vorhandenen Fanout-Exchange mit dem neuen Schreibweg. */
+    @Bean
+    public Binding persistBinding() {
+        return new Binding("chat.persist", Binding.DestinationType.QUEUE, EXCHANGE_NAME, "", null);
+    }
 
     /**
      * Meldet den Exchange beim Broker an. Spring legt ihn beim Start automatisch
