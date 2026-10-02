@@ -11,3 +11,8 @@ out/
 
 # Browser-Automation
 .playwright-mcp/
+
+# Lokale Zugangsdaten und temporäre Prüfdateien
+.env
+tmp/
+__pycache__/

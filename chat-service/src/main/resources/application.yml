@@ -8,15 +8,15 @@ spring:
   # Verbindung zur Datenbank aus docker-compose.
   # Zugangsdaten stehen hier im Klartext, weil das eine Uebungsumgebung ist.
   datasource:
-    url: jdbc:postgresql://localhost:5432/chat
-    username: chat
-    password: chat
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:chat}
+    username: ${POSTGRES_USER:chat}
+    password: ${POSTGRES_PASSWORD:chat-local-only}
 
   rabbitmq:
-    host: localhost
-    port: 5672
-    username: chat
-    password: chat
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:chat}
+    password: ${RABBITMQ_PASSWORD:chat-local-only}
 
 # Swagger UI liegt unter http://localhost:8080/swagger-ui.html
 springdoc:

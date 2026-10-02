@@ -1,42 +1,84 @@
-# Infrastruktur fuer den Bootstrap: Datenbank und Message Broker.
-# Der chat-service laeuft in dieser Phase noch auf dem Host (aus der IDE).
+# Bewertungsstack: Alle Verbindungen bleiben im Docker-Netz, kein Host-Port.
 services:
 
   postgres:
     image: postgres:17-alpine
-    container_name: m321-postgres
     environment:
-      POSTGRES_DB: chat
-      POSTGRES_USER: chat
-      POSTGRES_PASSWORD: chat
-    ports:
-      # NUR fuer den Bootstrap veroeffentlicht - siehe Hinweis im Plan.
-      - "5432:5432"
+      POSTGRES_DB: ${POSTGRES_DB:?Bitte .env aus .env.example anlegen}
+      POSTGRES_USER: ${POSTGRES_USER:?Bitte .env aus .env.example anlegen}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Bitte .env aus .env.example anlegen}
     volumes:
       # Alle .sql-Dateien hier drin fuehrt das Postgres-Image beim ERSTEN Start
       # in alphabetischer Reihenfolge aus. Danach nie wieder.
       - ./db:/docker-entrypoint-initdb.d:ro
-      - postgres-data:/var/lib/postgresql/data
+      - postgres-batch-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
     networks:
       - chat-net
 
   rabbitmq:
     image: rabbitmq:4-management-alpine
-    container_name: m321-rabbitmq
     environment:
-      RABBITMQ_DEFAULT_USER: chat
-      RABBITMQ_DEFAULT_PASS: chat
-    ports:
-      # NUR fuer den Bootstrap veroeffentlicht - siehe Hinweis im Plan.
-      - "5672:5672"
-      # Management-Oberflaeche: http://localhost:15672 (chat / chat)
-      - "15672:15672"
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?Bitte .env aus .env.example anlegen}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Bitte .env aus .env.example anlegen}
+    volumes:
+      - rabbitmq-batch-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
     networks:
       - chat-net
 
+  chat-service:
+    build:
+      context: .
+      dockerfile: chat-service/Dockerfile
+    environment: &connections
+      POSTGRES_HOST: postgres
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks: [chat-net]
+    restart: unless-stopped
+
+  batch-writer:
+    build:
+      context: .
+      dockerfile: batch-writer/Dockerfile
+    environment:
+      <<: *connections
+      BATCH_SIZE: ${BATCH_SIZE:-100}
+      BATCH_TIMEOUT_MS: ${BATCH_TIMEOUT_MS:-200}
+      RETRY_DELAY_MS: ${RETRY_DELAY_MS:-2000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks: [chat-net]
+    restart: unless-stopped
+
 volumes:
-  postgres-data:
+  postgres-batch-data:
+  rabbitmq-batch-data:
 
 networks:
   chat-net:
+    name: chat-net
     driver: bridge

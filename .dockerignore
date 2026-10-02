@@ -1,0 +1,9 @@
+.git
+.env
+**/target
+output
+presentation-build
+tmp
+.idea
+.codex
+.agents
