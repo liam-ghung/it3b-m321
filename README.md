@@ -155,6 +155,25 @@ Die Tabellen des neuen Vertrags heissen `message(id, room_id, sender_id, sender_
 content, sent_at)`. Räume werden beim Schreiben bewusst nicht geprüft; Raumverwaltung
 gehört nicht zur Bewertung.
 
+## Live-Zustellung: Prüfungen für Bewertung 2
+
+Schritt 4 prüft zwei Chat-Service-Instanzen sowie Live-Empfang bei ausgeschaltetem
+Writer und PostgreSQL. Mit laufendem Docker und Python 3:
+
+```bash
+docker compose up -d --build --scale chat-service=2
+python scripts/acceptance-live.py S3
+python scripts/acceptance-live.py S5
+```
+
+S3 sendet 400 Nachrichten. S5 stoppt Writer und Datenbank, sendet 100 Nachrichten
+und startet beide Dienste auch bei Fehlern wieder. Der Testclient läuft kurzzeitig
+als `python:3.13-alpine` im Docker-Netz, ohne Host-Ports. Es werden keine bestehenden
+Daten gelöscht. Zwei Chat-Instanzen bleiben danach aktiv.
+Messwerte stehen in `tmp/live-S3-result.json` und `tmp/live-S5-result.json`.
+Andere Szenarien und `all` folgen in den nächsten Schritten.
+Details und Ergebnisse: [Schritt 4](docs/live-zustellung-schritt-4.md).
+
 ## Abgabe
 
 Nach erfolgreicher Abnahme den geprüften Stand nach `main` pushen und den Tag

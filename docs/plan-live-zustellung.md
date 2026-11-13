@@ -197,7 +197,19 @@ nach Neustart alle 100 in der Datenbank. Beginn/Ende der Messung aus der Spezifi
 
 **Commit:** test: Verteilung und Live-Zustellung ohne Datenbank prüfen
 
-**Geprüft und korrigiert:** Offen.
+**Geprüft und korrigiert:** Am 13.11.2026 umgesetzt und geprüft.
+LiveMultiInstanceTest startet zwei vollständige HTTP-Anwendungen mit echtem
+RabbitMQ; beide A-Clients erhalten die 400 vollständigen Nachrichten genau einmal
+in Absenderreihenfolge, B keine. Zusätzlich S3 im Compose-Netz mit zwei getrennten
+Containern bestanden. S5: Writer und PostgreSQL nach SSE-Öffnung gestoppt;
+100 Nachrichten live, letzte Zustellung 0,000778 s nach letztem POST-Abschluss.
+Höchste Einzellatenz ab POST-Beginn: 0,005454 s. Nach Neustart alle 100 IDs in SQL
+nachgewiesen (8,344 s SQL-Wartezeit nach Rückkehr des Startbefehls).
+Pfadbestimmung des Hilfscontainers korrigiert und S3 erfolgreich wiederholt.
+Root-Lauf `mvn -B -ntp clean test`: BUILD SUCCESS um 09:05:28 Uhr, 37 Tests,
+keine Fehler/Fehlschläge/übersprungenen Tests. Produktionscode unverändert;
+keine Vertrags- oder Planänderung. Einzelheiten und Aufrufe stehen im
+[Schritt-4-Prüfbericht](live-zustellung-schritt-4.md).
 
 ## Schritt 5: Rückstau unter Pause prüfen
 
