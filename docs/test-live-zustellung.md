@@ -42,9 +42,36 @@ deshalb werden Queue-Limit und Prefetch zusätzlich geprüft.
 
 ## Ergebnisse
 
-Der Kandidat wird zuerst committed und anschließend aus einem frischen Klon
-geprüft. Die tatsächlichen Ergebnisse werden danach in einem gesonderten
-Dokumentations-Commit ergänzt. Bis dahin wird keine bestandene Gesamtabnahme behauptet.
+Geprüfter Kandidat: `f9d204ae71a6bdc0643841c6433d145a5b792ab1`.
+Frischer Klon mit `git clone --no-local` aus dem versionierten Repository nach
+`tmp/bewertung-2-final`, keine Übernahme unversionierter Arbeitsdateien.
+`.env` wurde ausschließlich aus der dortigen `.env.example` kopiert; die
+Datei-Hashes waren identisch. Build und Tests liefen aus diesem Klon.
+Compose-Projekt `live-final` mit eigenen neuen Volumes; S2–S8 danach auf genau
+diesem Stack ohne Queue-Purge, Tabellen-Reset oder Volume-Löschung.
+
+| Szenario | Ergebnis am 13.11.2026 |
+|---|---|
+| S1 | BUILD SUCCESS um 10:23:01 Uhr, 2:56 min, 45 Tests (39 chat-service, 6 batch-writer), 0 Fehler/Fehlschläge/übersprungene Tests. |
+| S2 | Frischer Build erfolgreich; alle vier Dienste laufen, 0 veröffentlichte Ports. |
+| S3 | Beide A-Clients je 400 vollständige Nachrichten genau einmal und in Absenderfolge; B: 0. |
+| S4 | 2 Live-Queues mit je 1 Consumer werden nach 4,734 s zu 1 Queue mit 1 Consumer; chat.persist und chat.dlq bleiben. |
+| S5 | 100 live, letzte Zustellung 0,000615 s nach letztem POST; höchste Einzellatenz 0,009661 s. Nach Neustart 100 IDs in SQL, Wartezeit 3,906 s. |
+| S6 | 5000 live, Sendedauer 6,771 s; 102 Stichproben, maximal 999 Ready + 1 Unacked = 1000; größter Abfrageabstand 0,106715 s. Nach Fortsetzen 3 neue Nachrichten je Client. |
+| S7 | Nach 10 s je 50 fehlende Nachrichten auf beiden Instanzen, anschließend je 1 neue live; keine Duplikate. Speicherweg aus, danach alle 52 IDs in SQL nach 3,844 s. |
+| S8 | 25 Java-Dateien, 157 heuristisch erfasste Deklarationen mit Kommentaren; keine Java-Streams, .env nicht versioniert. Zusätzlich manuelle Durchsicht, einschließlich kompakter Record-Konstruktoren. |
+
+Versionierte kompakte Messwerte: [live-abnahme-messwerte.json](live-abnahme-messwerte.json).
+Der vollständige lokale Bericht einschließlich IDs, Queue-Stichproben und Latenzen
+liegt in `tmp/bewertung-2-final/tmp/live-all-result.json`.
+Maven-/Build-/Ablauflogs: `tmp/step7-clone-maven.log`, `tmp/step7-clone-build.log`,
+`tmp/step7-clone-all.log`. Diese lokalen Rohdateien sind bewusst nicht versioniert;
+alle Prüfungen können mit dem versionierten Skript wiederholt werden.
+
+Die Ergebnisse werden wie im Plan vorgesehen nach dem Kandidaten als separater
+Dokumentations-Commit festgehalten. An Produktionscode und Tests wurde nach diesem
+erfolgreichen Lauf nichts geändert. Dies ist die eigene reproduzierte Abnahme,
+keine vorweggenommene Bewertung durch die Lehrperson.
 
 ## Code-Review
 

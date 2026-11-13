@@ -1,0 +1,103 @@
+{
+  "candidate": "f9d204ae71a6bdc0643841c6433d145a5b792ab1",
+  "date": "2026-11-13",
+  "fresh_clone": true,
+  "env_matches_example": true,
+  "S1": {
+    "tests": 45,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "finished": "2026-11-13T10:23:01+01:00",
+    "duration_seconds": 176
+  },
+  "S2_to_S8": {
+    "S2": {
+      "services": [
+        "batch-writer",
+        "chat-service",
+        "postgres",
+        "rabbitmq"
+      ],
+      "published_ports": 0,
+      "revision": "f9d204ae71a6bdc0643841c6433d145a5b792ab1",
+      "note": "Frischer Klon und Build sind separat vor diesem Aufruf erforderlich."
+    },
+    "S3": {
+      "messages_per_client": 400,
+      "room_b_messages": 0,
+      "sender_order": true,
+      "room_id": "179530ab-91bd-4d3c-b011-1eb69695298a",
+      "instance_addresses": [
+        "172.19.0.4",
+        "172.19.0.6"
+      ]
+    },
+    "S4": {
+      "before": {
+        "chat.live.79f5c7fd-7e66-4333-8c2d-34f7aa295b3d": 1,
+        "chat.live.a21dc6d1-18f6-466e-9a6e-d4b94287250e": 1
+      },
+      "after": {
+        "chat.live.79f5c7fd-7e66-4333-8c2d-34f7aa295b3d": 1
+      },
+      "scale_down_seconds": 4.734,
+      "storage_queues_preserved": true
+    },
+    "S5": {
+      "live_messages": 100,
+      "last_delivery_after_last_post_seconds": 0.000615,
+      "room_id": "590828a6-ff9c-4bb5-93b6-0a4b8cdc859c",
+      "stored_messages": 100,
+      "storage_wait_after_restart_seconds": 3.906,
+      "instance_addresses": [
+        "172.19.0.4"
+      ],
+      "max_post_to_sse_seconds": 0.009661
+    },
+    "S6": {
+      "queue": "chat.live.dc4de85c-5f6b-4019-9338-c17d3711899a",
+      "arguments": {
+        "x-max-length": 999,
+        "x-message-ttl": 30000,
+        "x-overflow": "drop-head",
+        "x-queue-type": "classic"
+      },
+      "prefetch": 1,
+      "max_ready": 999,
+      "max_unacked": 1,
+      "max_total": 1000,
+      "max_poll_gap_seconds": 0.10671500000000034,
+      "live_messages": 5000,
+      "send_seconds": 6.771,
+      "room_id": "20864ddc-a293-4fc7-9854-5bc838ab433a",
+      "new_messages_per_client_after_resume": 3,
+      "instance_addresses": [
+        "172.19.0.4",
+        "172.19.0.6"
+      ],
+      "sample_count": 102
+    },
+    "S7": {
+      "replayed_per_client": 50,
+      "new_live_per_client": 1,
+      "reconnect_wait_seconds": 10,
+      "reconnect_instances": 2,
+      "storage_stopped_during_replay": true,
+      "room_id": "b0f3f577-f6ee-4e8d-994f-379883354b00",
+      "stored_messages": 52,
+      "storage_wait_after_restart_seconds": 3.844,
+      "instance_addresses": [
+        "172.19.0.4",
+        "172.19.0.6"
+      ]
+    },
+    "S8": {
+      "java_files": 25,
+      "declarations_checked": 157,
+      "tracked_env": false,
+      "note": "Heuristische Grundpruefung; deutsche Kommentarqualitaet zusaetzlich manuell kontrolliert."
+    }
+  },
+  "success": true
+}

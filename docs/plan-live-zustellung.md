@@ -298,7 +298,22 @@ Gesamtabnahme ersetzt nicht die echten RabbitMQ-Tests im Maven-Lauf.
 
 **Commit:** docs: Gesamtabnahme und Code-Review-Vorbereitung dokumentieren
 
-**Geprüft und korrigiert:** Offen.
+**Geprüft und korrigiert:** Am 13.11.2026 abgeschlossen.
+S2, S4 und S8 sowie die vollständige Reihenfolge im Abnahmeskript ergänzt.
+S5 läuft nach dem Scale-down mit einer Instanz; S6 skaliert wieder auf zwei.
+Keine neuen Live-Variablen; feste Grenzen in .env.example erläutert. README und
+Code-Review-Orientierung aktualisiert, alle 25 Java-Dateien einschließlich Tests
+auf Kommentare und Streams geprüft. Keine Produktionskorrektur nötig.
+Kandidat f9d204ae71a6bdc0643841c6433d145a5b792ab1 frisch geklont,
+.env ausschließlich aus .env.example; Build erfolgreich, kein Host-Port.
+Root-Maven: BUILD SUCCESS um 10:23:01 Uhr, 45 Tests ohne Fehler/Fehlschläge/
+übersprungene Tests. S2–S8 anschließend in Reihenfolge auf demselben frischen
+Stack ohne Datenbereinigung bestanden. S4: 4,734 s; S5: 100 live und gespeichert;
+S6: 5000 live, max. 1000 Ready+Unacked; S7: 50 nachgeliefert und danach live.
+Tatsächliche Ergebnisse werden gemäß der vorgesehenen Klon-Regel als separater
+Dokumentations-Commit nachgetragen. Keine Planänderung.
+Belege: [Gesamtabnahme](test-live-zustellung.md) und
+[Messwerte](live-abnahme-messwerte.json).
 
 Für einen echten frischen Klon kann zuerst der geprüfte Kandidat committed werden;
 das erst danach verfügbare Klon-Ergebnis wird als gesonderter Dokumentations-Commit
