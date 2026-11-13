@@ -1,6 +1,9 @@
 package ch.benedict.m321.chat.message;
 
 import org.springframework.http.MediaType;
+import ch.benedict.m321.chat.live.LiveStreamConfiguration;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
@@ -29,7 +32,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * ganze Anwendung - deshalb braucht dieser Test weder Datenbank noch RabbitMQ.
  * Der Service wird durch eine Attrappe (@MockitoBean) ersetzt, die wir steuern.
  */
-@WebMvcTest(MessageController.class)
+@WebMvcTest(value = MessageController.class, excludeFilters =
+        @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = LiveStreamConfiguration.class))
 class MessageControllerTest {
 
     private static final UUID ROOM_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");

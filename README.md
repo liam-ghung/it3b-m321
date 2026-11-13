@@ -71,13 +71,14 @@ Die vollständigen Regeln stehen in [`CLAUDE.md`](CLAUDE.md).
 | chat-service | POST `/messages`, alter Pfad `/api/messages` bleibt als Alias; Server-UUID und Sendezeit |
 | Nachrichtenvertrag | `id`, `roomId`, `senderId`, `senderName`, `content`, `sentAt` |
 | RabbitMQ | Dauerhafte Queue `chat.persist`, Bindung an `chat.messages`, Fehlerablage `chat.dlq` |
-| Live-Empfang (Bewertung 2, Schritt 2) | `chat.messages` verteilt zusätzlich an `chat.delivery`; eigene flüchtige Queue je Instanz, begrenzter lokaler Empfangspuffer; noch kein SSE-Endpunkt |
+| Live-Empfang (Bewertung 2) | `chat.messages` verteilt zusätzlich an `chat.delivery`; eigene flüchtige Queue je Instanz, begrenzter lokaler Empfangspuffer |
+| Live-Anzeige (Schritt 3) | GET `/stream?roomId=…` liefert SSE nur für den gewählten Raum; ID und JSON, Heartbeats, begrenzte Client-Puffer; Nachlieferung mit `Last-Event-ID` noch offen |
 | batch-writer | 100 Nachrichten oder 200 ms, eine DB-Transaktion pro Stapel, ACK nach COMMIT |
 | Duplikate | `ON CONFLICT (id) DO NOTHING` verhindert doppelte Zeilen |
 | Ausfälle | Automatische Wiederholung bei DB-Ausfall, ungültige Nachrichten einzeln in DLQ |
 | Skalierung | Mehrere Writer als Competing Consumers an derselben Queue |
 | Tests | Root-Maven-Tests mit echten Containern; Szenarien S2–S8 über Abnahmeskript |
-| Später | Login, Raumverwaltung, SSE, Gateway und Benutzeroberflächen |
+| Später | SSE-Nachlieferung, Login, Raumverwaltung, Gateway und Benutzeroberflächen |
 
 Die älteren Dokumente `PLANUNG.md` und `docs/UMSETZUNG.md` beschreiben den ursprünglichen
 Bootstrap. Insbesondere Ports, Queue-Namen und die dort noch fehlende Speicherung sind

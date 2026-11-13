@@ -1,5 +1,8 @@
 server:
   port: 8080
+  tomcat:
+    # Tomcat NIO uebernimmt diese Grenze auch fuer blockierende Socket-Schreibzugriffe.
+    connection-timeout: 5s
 
 spring:
   application:

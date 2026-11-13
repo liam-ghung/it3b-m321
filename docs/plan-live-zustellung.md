@@ -162,7 +162,20 @@ Client verhindert keine Zustellung an einen gesunden Client.
 
 **Commit:** feat: Raumbezogene Live-Zustellung über SSE ergänzen
 
-**Geprüft und korrigiert:** Offen.
+**Geprüft und korrigiert:** Am 13.11.2026 umgesetzt und geprüft.
+Fünf echte HTTP-/RabbitMQ-Integrationstests und zwei lokale Tests ergänzen
+Format, Raumfilter, Live-Beginn, Kapazitätsgrenze, Abbruch und langsame Clients.
+Ein nicht lesender TCP-Client blockiert den gesunden Client nicht; sein Sender
+wird innerhalb der 15-s-Testfrist freigegeben. Netzwerkzugriffe erfolgen nur
+im begrenzten HTTP-Executor, nicht unter der gemeinsamen Zustandssperre.
+Der bestehende Controller-Slice-Test schließt die separate SSE-Konfiguration
+aus; die neuen Integrationstests prüfen sie mit echtem HTTP-Server.
+ContextClosedEvent beendet Streams vor dem Warten beim Herunterfahren.
+Root-Lauf `mvn -B -ntp clean test`: BUILD SUCCESS um 08:53:14 Uhr,
+36 Tests ohne Fehler, Fehlschläge oder übersprungene Tests.
+Details: [Schritt-3-Prüfbericht](live-zustellung-schritt-3.md).
+Mehrinstanz-Abnahme und Last-Event-ID bleiben in ihren vorgesehenen Schritten.
+Keine Planänderung.
 
 ## Schritt 4: Verteilung und unabhängigen Speicherweg nachweisen
 
