@@ -105,7 +105,16 @@ Ist-Topologie dokumentieren. Kein bestimmtes Testergebnis wird vorweggenommen.
 
 **Commit:** docs: Ausgangsstand für Live-Zustellung absichern
 
-**Geprüft und korrigiert:** Offen.
+**Geprüft und korrigiert:** Am 13.11.2026 Code, JSON-Vertrag und Bindings gegen die
+Spezifikation geprüft; Ergebnis in docs/ausgangsstand-live-zustellung.md. Ergänzt:
+MessageContractTest, weil die vorhandenen Tests nicht den vollständigen JSON-Body
+von API-Serialisierung und Broker-Konverter einschließlich Sonderzeichen verglichen.
+Produktionscode und Vertrag unverändert. Root-Aufruf: `mvn -B -ntp clean test`.
+Writer-Tests zunächst durch nicht erreichbare Docker Engine blockiert. Nach Öffnen
+von Docker Desktop vollständigen Root-Lauf wiederholt: BUILD SUCCESS am 13.11.2026
+um 08:28:49 Uhr (Europe/Zurich), 23 Tests (17 Chat-Service, 6 Writer), keine Fehler,
+keine fehlgeschlagenen oder übersprungenen Tests. Keine Änderung am bestehenden
+Nachrichtenvertrag nötig. Die ursprüngliche Planreihenfolge bleibt unverändert.
 
 ## Schritt 2: Live-Queue und Empfang pro Instanz
 
