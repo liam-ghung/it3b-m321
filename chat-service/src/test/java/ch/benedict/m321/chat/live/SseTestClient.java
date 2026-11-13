@@ -27,10 +27,19 @@ class SseTestClient implements AutoCloseable {
 
     /** Wartet auf echte HTTP-Header und startet dann genau einen Leser fuer diesen Testclient. */
     SseTestClient(String address) throws Exception {
+        this(address, null);
+    }
+
+    /** Ein optionaler Cursor simuliert die Wiederverbindung eines echten SSE-Clients. */
+    SseTestClient(String address, String lastEventId) throws Exception {
         http = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(Duration.ofSeconds(5)).build();
-        HttpRequest request = HttpRequest.newBuilder(URI.create(address))
-                .timeout(Duration.ofSeconds(10)).GET().build();
+        HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(address))
+                .timeout(Duration.ofSeconds(10)).GET();
+        if (lastEventId != null) {
+            builder.header("Last-Event-ID", lastEventId);
+        }
+        HttpRequest request = builder.build();
         response = http.send(request, HttpResponse.BodyHandlers.ofInputStream());
         body = response.body();
         reader = new Thread(this::readEvents, "sse-test-reader");

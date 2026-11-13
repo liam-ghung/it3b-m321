@@ -1,4 +1,4 @@
-"""Bewertung 2: S3, S5 und S6 im Compose-Stack; weitere Szenarien folgen in ihren Planschritten."""
+"""Bewertung 2: S3, S5, S6 und S7 im Compose-Stack; weitere Szenarien folgen in ihren Planschritten."""
 
 import argparse
 import base64
@@ -57,10 +57,13 @@ def eventually(check, seconds=60):
 class Stream:
     """Ein echter SSE-Leser im Docker-Netz sammelt vollstaendige Ereignisse samt Empfangszeit."""
 
-    def __init__(self, address, room):
+    def __init__(self, address, room, last_event_id=None):
         """Wartet vor dem Senden auf den geflushten Eroeffnungskommentar."""
         self.connection = http.client.HTTPConnection(address, 8080, timeout=15)
-        self.connection.request("GET", "/stream?roomId=" + room)
+        headers = {}
+        if last_event_id is not None:
+            headers["Last-Event-ID"] = last_event_id
+        self.connection.request("GET", "/stream?roomId=" + room, headers=headers)
         self.response = self.connection.getresponse()
         assert self.response.status == 200, self.response.status
         assert self.response.getheader("Content-Type", "").startswith("text/event-stream")
@@ -284,10 +287,50 @@ def pause_worker(addresses):
             client.close()
 
 
+def reconnect_worker(addresses):
+    """S7 prueft dieselbe und die andere Instanz bei abgeschaltetem Speicherweg."""
+    room = str(uuid.uuid4())
+    clients = []
+    try:
+        original = Stream(addresses[0], room)
+        clients.append(original)
+        emit({"phase": "ready"})
+        assert sys.stdin.readline().strip() == "go"
+        anchor, finished = send(addresses[0], room, "anchor", 1)
+        verify(original, anchor, finished + 5)
+        original.close()
+        clients.remove(original)
+        missed, finished = send(addresses[0], room, "missed", 50)
+        time.sleep(10)
+        cursor = anchor[0][0]["id"]
+        clients.append(Stream(addresses[0], room, cursor))
+        clients.append(Stream(addresses[1], room, cursor))
+        deadline = time.monotonic() + 60
+        for client in clients:
+            verify(client, missed, deadline)
+        fresh, finished = send(addresses[0], room, "live-again", 1)
+        for client in clients:
+            verify(client, fresh, finished + 5)
+        time.sleep(1)
+        for client in clients:
+            assert client.error is None, str(client.error)
+            assert client.events.empty(), "Anker oder Dublette erneut zugestellt"
+        emit({"phase": "result", "result": {
+            "replayed_per_client": 50, "new_live_per_client": 1, "reconnect_wait_seconds": 10,
+            "reconnect_instances": 2, "storage_stopped_during_replay": True,
+            "room_id": room, "ids": [message["id"] for message, began in anchor + missed + fresh]}})
+    finally:
+        for client in clients:
+            client.close()
+
+
 def worker(scenario, addresses):
     """Laeuft ausschliesslich im Hilfscontainer und spricht jede Instanz direkt per IP an."""
     if scenario == "S6":
         pause_worker(addresses)
+        return
+    if scenario == "S7":
+        reconnect_worker(addresses)
         return
     room = str(uuid.uuid4())
     clients = []
@@ -397,7 +440,7 @@ def scenario(name):
             process.stdin.write(json.dumps({"credentials": credentials}) + "\n")
             process.stdin.flush()
         receive(output, "ready", 60)
-        if name == "S5":
+        if name in ("S5", "S7"):
             stopped = True
             compose("stop", "batch-writer", "postgres")
             running = compose("ps", "--services", "--status", "running").splitlines()
@@ -430,7 +473,7 @@ def scenario(name):
             if process.poll() is None:
                 run(["docker", "rm", "-f", helper])
                 process.wait(timeout=20)
-    if name == "S5":
+    if name in ("S5", "S7"):
         started = time.monotonic()
         expected = sorted(result["ids"])
         eventually(lambda: stored(result["room_id"]) == expected, seconds=60)
@@ -444,7 +487,7 @@ def main():
     """Speichert echte Ergebnisse und Fehler; noch nicht implementierte Szenarien werden nicht behauptet."""
     global PROJECT
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("scenario", choices=["S3", "S5", "S6"])
+    parser.add_argument("scenario", choices=["S3", "S5", "S6", "S7"])
     parser.add_argument("--project", default=os.environ.get("COMPOSE_PROJECT_NAME"))
     parser.add_argument("--report")
     parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)

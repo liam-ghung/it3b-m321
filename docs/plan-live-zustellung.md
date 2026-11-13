@@ -262,7 +262,19 @@ Unbekannte und raumfremde IDs gemäß Vertrag behandeln.
 
 **Commit:** feat: Nachrichten nach SSE-Neuverbindung lückenfrei nachliefern
 
-**Geprüft und korrigiert:** Offen.
+**Geprüft und korrigiert:** Am 13.11.2026 umgesetzt und geprüft.
+Cursorprüfung, Vorbefüllen und Registrierung erfolgen unter derselben Sperre
+wie accept; Netzwerkzugriffe bleiben außerhalb. 400 bei fehlerhafter UUID,
+409 bei unbekanntem, raumfremdem, abgelaufenem oder verdrängtem Anker.
+Lokale Tests prüfen die exakte 120-s-Grenze und den Übergang vor Senderstart.
+Echte HTTP-/RabbitMQ-Tests prüfen S7, parallele POSTs bei Neuverbindung und
+Wiederverbindung an der zweiten Instanz bei explizit unerreichbarer Datenbank.
+Compose-S7: beide Instanzen liefern jeweils 50 Nachrichten nach 10 s nach,
+danach eine neue live; keine Dublette und kein erneuter Anker. Writer und DB
+währenddessen gestoppt; anschließend alle 52 IDs in SQL nachgewiesen (6,140 s).
+Root-Lauf: BUILD SUCCESS um 09:27:28 Uhr, 45 Tests ohne Fehler/Fehlschläge/
+übersprungene Tests. Keine Vertrags- oder Planänderung.
+Details: [Schritt-6-Prüfbericht](live-zustellung-schritt-6.md).
 
 ## Schritt 7: Reproduzierbare Gesamtabnahme und Abgabe
 

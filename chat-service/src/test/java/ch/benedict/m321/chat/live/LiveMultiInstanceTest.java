@@ -31,6 +31,32 @@ class LiveMultiInstanceTest {
     @Container
     private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-management-alpine");
 
+    /** Nach zehn Sekunden kann auch die andere Instanz den gemeinsamen Cursor ohne Datenbank nachliefern. */
+    @Test
+    void reconnectOnOtherInstanceReplays50ThenDeliversLive() throws Exception {
+        try (var first = startInstance(); var second = startInstance()) {
+            UUID room = UUID.randomUUID();
+            ObjectMapper mapper = first.getBean(ObjectMapper.class);
+            Message anchor;
+            try (SseTestClient original = new SseTestClient(address(first) + "/stream?roomId=" + room)) {
+                assertThat(original.awaitOpened()).isTrue();
+                List<Message> sent = send(address(first), room, "anchor", mapper, 1);
+                verify(original, sent, mapper);
+                anchor = sent.get(0);
+            }
+            List<Message> missed = send(address(first), room, "missed", mapper, 50);
+            Thread.sleep(10000);
+            try (SseTestClient resumed = new SseTestClient(address(second) + "/stream?roomId=" + room,
+                    anchor.id().toString())) {
+                assertThat(resumed.response().statusCode()).isEqualTo(200);
+                assertThat(resumed.awaitOpened()).isTrue();
+                verify(resumed, missed, mapper);
+                List<Message> live = send(address(first), room, "live", mapper, 1);
+                verify(resumed, live, mapper);
+            }
+        }
+    }
+
     /** Zwei unabhaengige Absender senden parallel; ihre jeweils 200 POSTs bleiben sequenziell. */
     @Test
     void bothInstancesDeliverAll400MessagesOnceInSenderOrder() throws Exception {
@@ -62,6 +88,7 @@ class LiveMultiInstanceTest {
         SpringApplication app = new SpringApplication(ChatServiceApplication.class);
         return (ServletWebServerApplicationContext) app.run(
                 "--server.port=0", "--spring.main.banner-mode=off",
+                "--spring.datasource.url=jdbc:postgresql://127.0.0.1:1/unavailable",
                 "--spring.rabbitmq.host=" + RABBIT.getHost(),
                 "--spring.rabbitmq.port=" + RABBIT.getAmqpPort(),
                 "--spring.rabbitmq.username=" + RABBIT.getAdminUsername(),
@@ -76,9 +103,14 @@ class LiveMultiInstanceTest {
 
     /** Die Serverantwort liefert die erwartete ID und den kompletten Nachrichteninhalt. */
     private List<Message> send(String address, UUID room, String sender, ObjectMapper mapper) throws Exception {
+        return send(address, room, sender, mapper, 200);
+    }
+
+    /** Verwendet fuer Replay dieselbe echte POST-Strecke mit einer kleineren vorgegebenen Nachrichtenanzahl. */
+    private List<Message> send(String address, UUID room, String sender, ObjectMapper mapper, int count) throws Exception {
         List<Message> messages = new ArrayList<>();
         try (HttpClient http = HttpClient.newHttpClient()) {
-            for (int index = 0; index < 200; index++) {
+            for (int index = 0; index < count; index++) {
                 NewMessage message = new NewMessage(room, sender, sender, "Nachricht " + index);
                 String json = mapper.writeValueAsString(message);
                 HttpRequest request = HttpRequest.newBuilder(URI.create(address + "/messages"))
@@ -102,7 +134,7 @@ class LiveMultiInstanceTest {
             expectedOrder.computeIfAbsent(message.senderId(), key -> new ArrayList<>()).add(message.id());
         }
         long deadline = System.nanoTime() + Duration.ofSeconds(60).toNanos();
-        for (int index = 0; index < 400; index++) {
+        for (int index = 0; index < expected.size(); index++) {
             long left = deadline - System.nanoTime();
             assertThat(left).isPositive();
             SseTestClient.Event event = client.next(Duration.ofNanos(left));

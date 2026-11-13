@@ -59,6 +59,92 @@ class LiveStreamIntegrationTest {
         registry.add("spring.rabbitmq.port", RABBIT::getAmqpPort);
         registry.add("spring.rabbitmq.username", RABBIT::getAdminUsername);
         registry.add("spring.rabbitmq.password", RABBIT::getAdminPassword);
+        registry.add("spring.datasource.url", () -> "jdbc:postgresql://127.0.0.1:1/unavailable");
+    }
+
+    /** S7 funktioniert ohne erreichbare Datenbank: 50 verpasste Nachrichten nach zehn Sekunden, danach live. */
+    @Test
+    void reconnectReplays50MessagesThenContinuesLiveWithoutDatabase() throws Exception {
+        UUID room = UUID.randomUUID();
+        SseTestClient original = open(room);
+        Message anchor = post(room, "Anker");
+        assertEvent(original.next(Duration.ofSeconds(5)), anchor);
+        original.close();
+        clients.remove(original);
+        List<Message> missed = new ArrayList<>();
+        for (int index = 0; index < 50; index++) {
+            missed.add(post(room, "Verpasst " + index));
+        }
+        Thread.sleep(10000);
+        SseTestClient resumed = new SseTestClient(address("/stream?roomId=" + room), anchor.id().toString());
+        clients.add(resumed);
+        assertThat(resumed.response().statusCode()).isEqualTo(200);
+        assertThat(resumed.awaitOpened()).isTrue();
+        for (Message expected : missed) {
+            assertEvent(resumed.next(Duration.ofSeconds(5)), expected);
+        }
+        assertThat(resumed.next(Duration.ofMillis(300))).isNull();
+        Message live = post(room, "Wieder live");
+        assertEvent(resumed.next(Duration.ofSeconds(5)), live);
+        assertThat(resumed.next(Duration.ofMillis(300))).isNull();
+    }
+
+    /** Broker-Lieferungen waehrend der Wiederverbindung duerfen weder Luecken noch doppelte IDs erzeugen. */
+    @Test
+    void concurrentPostsDuringReconnectFollowReplayExactlyOnce() throws Exception {
+        UUID room = UUID.randomUUID();
+        SseTestClient original = open(room);
+        Message anchor = post(room, "Anker");
+        assertEvent(original.next(Duration.ofSeconds(5)), anchor);
+        original.close();
+        clients.remove(original);
+        List<Message> expected = new ArrayList<>();
+        for (int index = 0; index < 30; index++) {
+            expected.add(post(room, "Bereits verpasst " + index));
+        }
+        try (var sender = java.util.concurrent.Executors.newSingleThreadExecutor()) {
+            var pending = sender.submit(() -> {
+                List<Message> concurrent = new ArrayList<>();
+                for (int index = 0; index < 50; index++) {
+                    concurrent.add(post(room, "Uebergang " + index));
+                }
+                return concurrent;
+            });
+            SseTestClient resumed = new SseTestClient(address("/stream?roomId=" + room), anchor.id().toString());
+            clients.add(resumed);
+            assertThat(resumed.awaitOpened()).isTrue();
+            expected.addAll(pending.get(30, java.util.concurrent.TimeUnit.SECONDS));
+            for (Message message : expected) {
+                assertEvent(resumed.next(Duration.ofSeconds(5)), message);
+            }
+            assertThat(resumed.next(Duration.ofMillis(300))).isNull();
+        }
+    }
+
+    /** Fehlerhafte, fremde und unbekannte Cursor werden vor dem Oeffnen des SSE-Streams abgewiesen. */
+    @Test
+    void invalidAndUnavailableCursorsReturnErrorsWithoutLeakingConnections() throws Exception {
+        UUID room = UUID.randomUUID();
+        Message anchor = post(room, "Anker");
+        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> assertThat(buffer.snapshot()).contains(anchor));
+        assertCursorStatus(room, "kaputt", 400);
+        assertCursorStatus(room, "", 400);
+        assertCursorStatus(room, "1-1-1-1-1", 400);
+        assertCursorStatus(room, UUID.randomUUID().toString(), 409);
+        assertCursorStatus(UUID.randomUUID(), anchor.id().toString(), 409);
+        buffer.clear();
+        assertCursorStatus(room, anchor.id().toString(), 409);
+        assertThat(buffer.connectionCount()).isZero();
+    }
+
+    /** Liest eine abgeschlossene Fehlerantwort statt einen Hintergrundleser fuer einen ungueltigen Stream zu starten. */
+    private void assertCursorStatus(UUID room, String cursor, int status) throws Exception {
+        try (HttpClient http = HttpClient.newHttpClient()) {
+            HttpRequest request = HttpRequest.newBuilder(URI.create(address("/stream?roomId=" + room)))
+                    .header("Last-Event-ID", cursor).timeout(Duration.ofSeconds(5)).GET().build();
+            HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
+            assertThat(response.statusCode()).isEqualTo(status);
+        }
     }
 
     /** Keine Stream-Verbindung und kein Sender darf in den naechsten Test hineinlaufen. */

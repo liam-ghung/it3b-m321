@@ -72,13 +72,14 @@ Die vollständigen Regeln stehen in [`CLAUDE.md`](CLAUDE.md).
 | Nachrichtenvertrag | `id`, `roomId`, `senderId`, `senderName`, `content`, `sentAt` |
 | RabbitMQ | Dauerhafte Queue `chat.persist`, Bindung an `chat.messages`, Fehlerablage `chat.dlq` |
 | Live-Empfang (Bewertung 2) | `chat.messages` verteilt zusätzlich an `chat.delivery`; eigene flüchtige Queue je Instanz, begrenzter lokaler Empfangspuffer |
-| Live-Anzeige (Schritt 3) | GET `/stream?roomId=…` liefert SSE nur für den gewählten Raum; ID und JSON, Heartbeats, begrenzte Client-Puffer; Nachlieferung mit `Last-Event-ID` noch offen |
+| Live-Anzeige | GET `/stream?roomId=…` liefert SSE nur für den gewählten Raum; ID und JSON, Heartbeats, begrenzte Client-Puffer |
+| Neuverbindung (Schritt 6) | `Last-Event-ID` liefert spätere Nachrichten desselben Raums aus dem lokalen 10000er-/120-s-Puffer und geht geordnet zu live über; ungültige UUID: 400, nicht verfügbarer oder raumfremder Cursor: 409 |
 | batch-writer | 100 Nachrichten oder 200 ms, eine DB-Transaktion pro Stapel, ACK nach COMMIT |
 | Duplikate | `ON CONFLICT (id) DO NOTHING` verhindert doppelte Zeilen |
 | Ausfälle | Automatische Wiederholung bei DB-Ausfall, ungültige Nachrichten einzeln in DLQ |
 | Skalierung | Mehrere Writer als Competing Consumers an derselben Queue |
 | Tests | Root-Maven-Tests mit echten Containern; Szenarien S2–S8 über Abnahmeskript |
-| Später | SSE-Nachlieferung, Login, Raumverwaltung, Gateway und Benutzeroberflächen |
+| Später | Login, Raumverwaltung, Gateway und Benutzeroberflächen |
 
 Die älteren Dokumente `PLANUNG.md` und `docs/UMSETZUNG.md` beschreiben den ursprünglichen
 Bootstrap. Insbesondere Ports, Queue-Namen und die dort noch fehlende Speicherung sind
@@ -165,6 +166,7 @@ docker compose up -d --build --scale chat-service=2
 python scripts/acceptance-live.py S3
 python scripts/acceptance-live.py S5
 python scripts/acceptance-live.py S6
+python scripts/acceptance-live.py S7
 ```
 
 S3 sendet 400 Nachrichten. S5 stoppt Writer und Datenbank, sendet 100 Nachrichten
@@ -178,6 +180,11 @@ werden neue Nachrichten an beiden Instanzen geprüft. Die lokale Puffergrenze wi
 zusätzlich im Maven-Lauf getestet. Ergebnisse: `tmp/live-S6-result.json` und
 [Schritt 5](docs/live-zustellung-schritt-5.md).
 Andere Szenarien und `all` folgen in den nächsten Schritten.
+S7 prüft die Nachlieferung von 50 Nachrichten nach zehn Sekunden auf beiden
+Instanzen und danach neue Live-Nachrichten. Writer und Datenbank sind dabei
+gestoppt und werden anschließend wieder gestartet; alle 52 Testnachrichten
+(Anker, 50 verpasste, eine neue) werden danach in SQL nachgewiesen.
+Ergebnisse: `tmp/live-S7-result.json`, Erklärung: [Schritt 6](docs/live-zustellung-schritt-6.md).
 Details und Ergebnisse: [Schritt 4](docs/live-zustellung-schritt-4.md).
 
 ## Abgabe
