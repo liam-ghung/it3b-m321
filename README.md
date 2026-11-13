@@ -36,7 +36,11 @@ keinen Port. Das Gateway und die Clients gehören zum späteren Ausbau.
 ## Dokumente
 
 - [`docs/spec-batch-writer.md`](docs/spec-batch-writer.md) — Vertrag, Datenmodell,
-  Fehlerverhalten und messbare Anforderungen der Bewertung 1; aktuell massgeblich.
+  Fehlerverhalten und messbare Anforderungen der Bewertung 1.
+- [`docs/spec-live-zustellung.md`](docs/spec-live-zustellung.md) — Vertrag und Grenzen für Bewertung 2.
+- [`docs/plan-live-zustellung.md`](docs/plan-live-zustellung.md) — vorab gepushter Plan mit Prüfnotizen.
+- [`docs/test-live-zustellung.md`](docs/test-live-zustellung.md) — Gesamtabnahme aus frischem Klon.
+- [`docs/code-review-live-zustellung.md`](docs/code-review-live-zustellung.md) — einfache Code-Erklärung und Lehrerfragen.
 - [`docs/plan-batch-writer.md`](docs/plan-batch-writer.md) — vorab versionierte Bau-Schritte mit Tests.
 - [`docs/test-batch-writer.md`](docs/test-batch-writer.md) — gemessene Ergebnisse der lokalen Abnahme.
 - [`docs/code-review-batch-writer.md`](docs/code-review-batch-writer.md) — einfache Erklärungen und Lehrerfragen zum Code.
@@ -78,7 +82,7 @@ Die vollständigen Regeln stehen in [`CLAUDE.md`](CLAUDE.md).
 | Duplikate | `ON CONFLICT (id) DO NOTHING` verhindert doppelte Zeilen |
 | Ausfälle | Automatische Wiederholung bei DB-Ausfall, ungültige Nachrichten einzeln in DLQ |
 | Skalierung | Mehrere Writer als Competing Consumers an derselben Queue |
-| Tests | Root-Maven-Tests mit echten Containern; Szenarien S2–S8 über Abnahmeskript |
+| Tests | 45 Maven-Tests mit echtem RabbitMQ/PostgreSQL; Bewertung 2: `scripts/acceptance-live.py all` prüft S2–S8 in Reihenfolge |
 | Später | Login, Raumverwaltung, Gateway und Benutzeroberflächen |
 
 Die älteren Dokumente `PLANUNG.md` und `docs/UMSETZUNG.md` beschreiben den ursprünglichen
@@ -156,17 +160,15 @@ Die Tabellen des neuen Vertrags heissen `message(id, room_id, sender_id, sender_
 content, sent_at)`. Räume werden beim Schreiben bewusst nicht geprüft; Raumverwaltung
 gehört nicht zur Bewertung.
 
-## Live-Zustellung: Prüfungen für Bewertung 2
+## Live-Zustellung: Gesamtabnahme für Bewertung 2
 
-Schritt 4 prüft zwei Chat-Service-Instanzen sowie Live-Empfang bei ausgeschaltetem
-Writer und PostgreSQL. Mit laufendem Docker und Python 3:
+Nach frischem Klon `.env.example` als `.env` kopieren. Mit Java 21, Maven,
+laufendem Docker und Python 3 (ohne Zusatzpakete):
 
 ```bash
-docker compose up -d --build --scale chat-service=2
-python scripts/acceptance-live.py S3
-python scripts/acceptance-live.py S5
-python scripts/acceptance-live.py S6
-python scripts/acceptance-live.py S7
+mvn clean test
+docker compose up -d --build
+python scripts/acceptance-live.py all
 ```
 
 S3 sendet 400 Nachrichten. S5 stoppt Writer und Datenbank, sendet 100 Nachrichten
@@ -179,7 +181,12 @@ misst Ready plus Unacked. Die Pause wird auch bei Fehlern aufgehoben; anschließ
 werden neue Nachrichten an beiden Instanzen geprüft. Die lokale Puffergrenze wird
 zusätzlich im Maven-Lauf getestet. Ergebnisse: `tmp/live-S6-result.json` und
 [Schritt 5](docs/live-zustellung-schritt-5.md).
-Andere Szenarien und `all` folgen in den nächsten Schritten.
+`all` führt S2–S8 in Auftragsreihenfolge auf demselben Stack aus, ohne Daten zu
+löschen. Der Bericht steht unter `tmp/live-all-result.json`. Einzelne Szenarien
+sind ebenfalls möglich, zum Beispiel `python scripts/acceptance-live.py S7`.
+S2 kontrolliert die Dienste und Ports; den frischen Klon und Build führt man davor
+aus. S4 misst das Entfernen einer Live-Queue nach Scale-down. S8 prüft Quelltext
+und unversionierte `.env`; Kommentare werden zusätzlich manuell gelesen.
 S7 prüft die Nachlieferung von 50 Nachrichten nach zehn Sekunden auf beiden
 Instanzen und danach neue Live-Nachrichten. Writer und Datenbank sind dabei
 gestoppt und werden anschließend wieder gestartet; alle 52 Testnachrichten
@@ -189,6 +196,7 @@ Details und Ergebnisse: [Schritt 4](docs/live-zustellung-schritt-4.md).
 
 ## Abgabe
 
-Nach erfolgreicher Abnahme den geprüften Stand nach `main` pushen und den Tag
-`bewertung-1` setzen und pushen. Bewertet wird dieser Tag. Den Link
-https://github.com/liam-ghung/it3b-m321 im Schulportal einreichen.
+Für Bewertung 2 nach erfolgreicher Gesamtabnahme den geprüften Stand auf `main`
+hochladen und den Tag `bewertung-2` setzen und pushen. Bewertet wird dieser Tag.
+`bewertung-1` bleibt unverändert als frühere Abgabe erhalten. Den
+[Fork-Link](https://github.com/liam-ghung/it3b-m321) im Schulportal einreichen.

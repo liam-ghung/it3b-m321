@@ -1,4 +1,4 @@
-"""Bewertung 2: S3, S5, S6 und S7 im Compose-Stack; weitere Szenarien folgen in ihren Planschritten."""
+"""Bewertung 2: S2 bis S8 in Auftragsreihenfolge auf demselben Compose-Stack."""
 
 import argparse
 import base64
@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import queue
+import re
 import shlex
 import socket
 import subprocess
@@ -372,10 +373,10 @@ def worker(scenario, addresses):
             client.close()
 
 
-def addresses():
+def addresses(expected_count=2):
     """Liest konkrete Container-Adressen statt zufaellig ueber den Dienstnamen zu verteilen."""
     containers = compose("ps", "-q", "chat-service").splitlines()
-    assert len(containers) == 2, "Genau zwei Chat-Instanzen erforderlich"
+    assert len(containers) == expected_count, f"Genau {expected_count} Chat-Instanzen erforderlich"
     result = []
     for container in containers:
         info = json.loads(run(["docker", "inspect", container]))[0]
@@ -411,10 +412,101 @@ def stored(room):
     return compose("exec", "-T", "postgres", "sh", "-c", command).splitlines()
 
 
+def management(path):
+    """Liest Broker-Metadaten intern; Zugangsdaten bleiben in der Container-Umgebung."""
+    command = 'curl -fsS --max-time 5 -u "$RABBITMQ_USER:$RABBITMQ_PASSWORD" '
+    command += shlex.quote("http://rabbitmq:15672" + path)
+    return json.loads(compose("exec", "-T", "chat-service", "sh", "-c", command))
+
+
+def live_queues():
+    """Zaehlt nur Queue-Bindings des Anzeige-Exchange und kontrolliert deren Consumer."""
+    bindings = management("/api/exchanges/%2F/chat.delivery/bindings/source")
+    names = {item["destination"] for item in bindings if item["destination_type"] == "queue"}
+    queues = management("/api/queues/%2F")
+    result = {item["name"]: item["consumers"] for item in queues if item["name"] in names}
+    assert len(result) == len(names), "Queue-Metadaten fehlen"
+    return result
+
+
+def check_start():
+    """S2 kontrolliert den zuvor gebauten Stack; der frische Klon wird separat im Bericht belegt."""
+    config = json.loads(compose("config", "--format", "json"))
+    expected = {"postgres", "rabbitmq", "chat-service", "batch-writer"}
+    assert set(config["services"]) == expected
+    for service in config["services"].values():
+        assert not service.get("ports"), "Veroeffentlichter Port"
+    assert not config["services"]["chat-service"].get("container_name"), "Skalierung verhindert"
+    running = set(compose("ps", "--services", "--status", "running").splitlines())
+    assert running == expected
+    for container in compose("ps", "-q").splitlines():
+        info = json.loads(run(["docker", "inspect", container]))[0]
+        assert not info["HostConfig"]["PortBindings"], "Host-Portbindung"
+    eventually(lambda: '"status":"UP"' in compose("exec", "-T", "chat-service", "curl",
+               "-fsS", "--max-time", "5", "http://localhost:8080/actuator/health"))
+    return {"services": sorted(running), "published_ports": 0,
+            "revision": run(["git", "rev-parse", "HEAD"]),
+            "note": "Frischer Klon und Build sind separat vor diesem Aufruf erforderlich."}
+
+
+def check_scale_down():
+    """S4 misst ab Beginn des Scale-down inklusive Compose-Laufzeit bis zum Verschwinden der Queue."""
+    compose("up", "-d", "--no-deps", "--scale", "chat-service=2", "chat-service")
+    addresses()
+    eventually(lambda: len(live_queues()) == 2 and list(live_queues().values()) == [1, 1])
+    before = live_queues()
+    started = time.monotonic()
+    compose("up", "-d", "--no-deps", "--scale", "chat-service=1", "chat-service")
+    remaining = 30 - (time.monotonic() - started)
+    assert remaining > 0, "Scale-down dauert laenger als 30 s"
+    eventually(lambda: len(live_queues()) == 1 and list(live_queues().values()) == [1], remaining)
+    elapsed = time.monotonic() - started
+    assert elapsed <= 30
+    names = {item["name"] for item in management("/api/queues/%2F")}
+    assert {"chat.persist", "chat.dlq"}.issubset(names)
+    return {"before": before, "after": live_queues(), "scale_down_seconds": round(elapsed, 3),
+            "storage_queues_preserved": True}
+
+
+def check_source():
+    """S8 sucht Streams und fehlende Deklarationskommentare; Verstaendlichkeit wird zusaetzlich manuell gelesen."""
+    assert not run(["git", "ls-files", "--", ".env"]), ".env ist versioniert"
+    method = re.compile(r"(?m)^[ \t]*(?:(?:public|private|protected|static|final|synchronized|abstract)\s+)*"
+                        r"(?:[\w<>\[\],.?]+\s+)?(\w+)\s*\([^;{}]*\)\s*(?:throws [\w., ]+)?\s*\{")
+    classes = re.compile(r"(?m)^[ \t]*(?:(?:public|private|protected|static|final)\s+)*"
+                         r"(?:class|record|interface|enum)\s+\w+")
+    checked = 0
+    declarations = 0
+    for path in sorted((ROOT / "chat-service/src").rglob("*.java")):
+        source = path.read_text(encoding="utf-8")
+        assert not re.search(r"\.(?:parallelStream|stream)\s*\(", source), f"Java-Stream in {path}"
+        matches = list(classes.finditer(source))
+        for match in method.finditer(source):
+            if match.group(1) not in {"if", "for", "while", "switch", "catch", "synchronized", "try"}:
+                matches.append(match)
+        for match in matches:
+            previous = source[:match.start()].rstrip()
+            # Annotationen duerfen zwischen Javadoc und Deklaration stehen, auch mehrzeilig.
+            previous = re.sub(r"(?:\s*@\w+(?:\([^;]*\))?)+\s*$", "", previous).rstrip()
+            line = source.count("\n", 0, match.start()) + 1
+            assert previous.endswith("*/") and "/**" in previous, f"Kommentar fehlt: {path}:{line}"
+            declarations += 1
+        checked += 1
+    return {"java_files": checked, "declarations_checked": declarations, "tracked_env": False,
+            "note": "Heuristische Grundpruefung; deutsche Kommentarqualitaet zusaetzlich manuell kontrolliert."}
+
+
 def scenario(name):
     """Oeffnet Streams vor dem Ausfall und stellt gestoppte Dienste auch bei Fehlern wieder her."""
-    compose("up", "-d", "--scale", "chat-service=2", "--scale", "batch-writer=1")
-    targets = addresses()
+    if name == "S2":
+        return check_start()
+    if name == "S4":
+        return check_scale_down()
+    if name == "S8":
+        return check_source()
+    replicas = 1 if name == "S5" else 2
+    compose("up", "-d", "--scale", f"chat-service={replicas}", "--scale", "batch-writer=1")
+    targets = addresses(replicas)
     helper = "live-check-" + uuid.uuid4().hex
     script = str(Path(__file__).resolve())
     command = ["docker", "run", "--rm", "-i", "--name", helper, "--network", "chat-net",
@@ -487,7 +579,7 @@ def main():
     """Speichert echte Ergebnisse und Fehler; noch nicht implementierte Szenarien werden nicht behauptet."""
     global PROJECT
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("scenario", choices=["S3", "S5", "S6", "S7"])
+    parser.add_argument("scenario", choices=["all", "S2", "S3", "S4", "S5", "S6", "S7", "S8"])
     parser.add_argument("--project", default=os.environ.get("COMPOSE_PROJECT_NAME"))
     parser.add_argument("--report")
     parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
@@ -500,7 +592,16 @@ def main():
     report = ROOT / (args.report or f"tmp/live-{args.scenario}-result.json")
     result = {"scenario": args.scenario, "success": False}
     try:
-        result["measurements"] = scenario(args.scenario)
+        if args.scenario == "all":
+            result["measurements"] = {}
+            for name in ["S2", "S3", "S4", "S5", "S6", "S7", "S8"]:
+                print(f"{name} wird geprueft ...", flush=True)
+                result["measurements"][name] = scenario(name)
+                report.parent.mkdir(parents=True, exist_ok=True)
+                report.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+                print(f"{name}: bestanden", flush=True)
+        else:
+            result["measurements"] = scenario(args.scenario)
         result["success"] = True
         print(f"{args.scenario}: bestanden", flush=True)
     except Exception as error:
