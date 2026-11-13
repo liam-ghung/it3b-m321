@@ -164,6 +164,7 @@ Writer und PostgreSQL. Mit laufendem Docker und Python 3:
 docker compose up -d --build --scale chat-service=2
 python scripts/acceptance-live.py S3
 python scripts/acceptance-live.py S5
+python scripts/acceptance-live.py S6
 ```
 
 S3 sendet 400 Nachrichten. S5 stoppt Writer und Datenbank, sendet 100 Nachrichten
@@ -171,6 +172,11 @@ und startet beide Dienste auch bei Fehlern wieder. Der Testclient läuft kurzzei
 als `python:3.13-alpine` im Docker-Netz, ohne Host-Ports. Es werden keine bestehenden
 Daten gelöscht. Zwei Chat-Instanzen bleiben danach aktiv.
 Messwerte stehen in `tmp/live-S3-result.json` und `tmp/live-S5-result.json`.
+S6 pausiert eine Chat-Instanz, sendet 5000 Nachrichten über die gesunde Instanz und
+misst Ready plus Unacked. Die Pause wird auch bei Fehlern aufgehoben; anschließend
+werden neue Nachrichten an beiden Instanzen geprüft. Die lokale Puffergrenze wird
+zusätzlich im Maven-Lauf getestet. Ergebnisse: `tmp/live-S6-result.json` und
+[Schritt 5](docs/live-zustellung-schritt-5.md).
 Andere Szenarien und `all` folgen in den nächsten Schritten.
 Details und Ergebnisse: [Schritt 4](docs/live-zustellung-schritt-4.md).
 

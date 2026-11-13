@@ -1,6 +1,7 @@
-"""Bewertung 2: S3 und S5 im Compose-Stack; weitere Szenarien folgen in ihren Planschritten."""
+"""Bewertung 2: S3, S5 und S6 im Compose-Stack; weitere Szenarien folgen in ihren Planschritten."""
 
 import argparse
+import base64
 import concurrent.futures
 import http.client
 import json
@@ -14,6 +15,7 @@ import sys
 import threading
 import time
 import uuid
+import urllib.parse
 
 ROOT = Path(__file__).resolve().parent.parent
 PROJECT = None
@@ -160,8 +162,133 @@ def emit(value):
     print(json.dumps(value), flush=True)
 
 
+class QueueMonitor:
+    """Misst die pausierte Live-Queue im Netz, ohne pro Stichprobe einen Docker-Prozess zu starten."""
+
+    def __init__(self, credentials, paused_address):
+        """Ordnet die Queue ueber den echten Consumer-Peer zu und prueft die strukturellen Grenzen."""
+        token = base64.b64encode(credentials.encode()).decode()
+        self.headers = {"Authorization": "Basic " + token}
+        consumers = self.get("/api/consumers/%2F")
+        matches = [item for item in consumers if item["queue"]["name"].startswith("chat.live.")
+                   and item["channel_details"]["peer_host"] == paused_address]
+        assert len(matches) == 1, "Pausierte Instanz hat nicht genau einen Live-Consumer"
+        consumer = matches[0]
+        assert consumer["prefetch_count"] == 1 and consumer["ack_required"]
+        self.name = consumer["queue"]["name"]
+        self.path = "/api/queues/%2F/" + urllib.parse.quote(self.name, safe="")
+        info = self.get(self.path)
+        assert info["consumers"] == 1
+        assert info["exclusive"] and info["auto_delete"] and not info["durable"]
+        arguments = info["arguments"]
+        assert arguments["x-max-length"] == 999
+        assert arguments["x-message-ttl"] == 30000
+        assert arguments["x-overflow"] == "drop-head"
+        assert arguments["x-queue-type"] == "classic"
+        self.arguments = arguments
+        self.samples = []
+        self.error = None
+        self.stop = threading.Event()
+        self.started = time.monotonic()
+        self.thread = threading.Thread(target=self.measure, daemon=True)
+
+    def get(self, path):
+        """Management-Fehler sind Testfehler; Zugangsdaten werden nie protokolliert."""
+        connection = http.client.HTTPConnection("rabbitmq", 15672, timeout=5)
+        try:
+            connection.request("GET", path, headers=self.headers)
+            response = connection.getresponse()
+            payload = response.read()
+            assert response.status == 200, f"Management HTTP {response.status}"
+            return json.loads(payload)
+        finally:
+            connection.close()
+
+    def measure(self):
+        """Ready und Unacked werden gemeinsam erfasst; Management-Werte koennen zeitlich verzoegert sein."""
+        try:
+            while not self.stop.is_set():
+                began = time.monotonic()
+                info = self.get(self.path)
+                ready = info["messages_ready"]
+                unacked = info["messages_unacknowledged"]
+                self.samples.append({"seconds": round(time.monotonic() - self.started, 6),
+                                     "ready": ready, "unacked": unacked, "total": ready + unacked})
+                assert ready <= 999 and unacked <= 1 and ready + unacked <= 1000, "Queue-Grenze verletzt"
+                self.stop.wait(max(0, 0.1 - (time.monotonic() - began)))
+        except Exception as error:
+            self.error = error
+
+    def finish(self):
+        """Beendet die Messung vor Wiederaufnahme und gibt Maxima samt allen Stichproben zurueck."""
+        self.stop.set()
+        self.thread.join(6)
+        assert not self.thread.is_alive(), "Queue-Messung haengt"
+        assert self.error is None, str(self.error)
+        assert self.samples, "Keine Queue-Messung"
+        gaps = [self.samples[index]["seconds"] - self.samples[index - 1]["seconds"]
+                for index in range(1, len(self.samples))]
+        return {"queue": self.name, "arguments": self.arguments, "prefetch": 1,
+                "max_ready": max(item["ready"] for item in self.samples),
+                "max_unacked": max(item["unacked"] for item in self.samples),
+                "max_total": max(item["total"] for item in self.samples),
+                "samples": self.samples, "max_poll_gap_seconds": max(gaps, default=0)}
+
+
+def pause_worker(addresses):
+    """Prueft 5000 Live-Ereignisse waehrend der Pause und neue Ereignisse nach dem Fortsetzen."""
+    config = json.loads(sys.stdin.readline())
+    monitor = QueueMonitor(config["credentials"], addresses[1])
+    clients = []
+    try:
+        room = str(uuid.uuid4())
+        clients.append(Stream(addresses[0], room))
+        monitor.thread.start()
+        emit({"phase": "ready"})
+        assert sys.stdin.readline().strip() == "go"
+        started = time.monotonic()
+        expected, finished = send(addresses[0], room, "healthy-sender", 5000)
+        verify(clients[0], expected, finished + 60)
+        # Mindestens ein gefuellter Management-Snapshot muss sichtbar werden, bevor wir fortsetzen.
+        deadline = time.monotonic() + 10
+        while not any(sample["total"] >= 999 for sample in monitor.samples):
+            assert monitor.error is None, str(monitor.error)
+            assert time.monotonic() < deadline, "Kein voller Rueckstau gemessen"
+            time.sleep(0.1)
+        time.sleep(1)
+        assert clients[0].error is None, str(clients[0].error)
+        assert clients[0].events.empty(), "Doppelte Live-Nachricht"
+        metrics = monitor.finish()
+        metrics.update({"live_messages": 5000, "send_seconds": round(finished - started, 3),
+                        "room_id": room, "ids": [message["id"] for message, began in expected]})
+        emit({"phase": "resume", "measurements": metrics})
+        assert sys.stdin.readline().strip() == "go"
+        # Ein frischer Raum trennt den Wiederanlaufnachweis von absichtlich verworfenem altem Rueckstau.
+        new_room = str(uuid.uuid4())
+        clients.append(Stream(addresses[0], new_room))
+        clients.append(Stream(addresses[1], new_room))
+        fresh, finished = send(addresses[0], new_room, "after-resume", 3)
+        verify(clients[1], fresh, finished + 60)
+        verify(clients[2], fresh, finished + 60)
+        time.sleep(1)
+        for client in clients:
+            assert client.error is None, str(client.error)
+            assert client.events.empty(), "Zusaetzliches Ereignis nach Wiederaufnahme"
+        metrics["new_messages_per_client_after_resume"] = 3
+        emit({"phase": "result", "result": metrics})
+    finally:
+        monitor.stop.set()
+        if monitor.thread.is_alive():
+            monitor.thread.join(6)
+        for client in clients:
+            client.close()
+
+
 def worker(scenario, addresses):
     """Laeuft ausschliesslich im Hilfscontainer und spricht jede Instanz direkt per IP an."""
+    if scenario == "S6":
+        pause_worker(addresses)
+        return
     room = str(uuid.uuid4())
     clients = []
     try:
@@ -255,20 +382,48 @@ def scenario(name):
     output = queue.Queue()
     threading.Thread(target=read_output, args=(process, output), daemon=True).start()
     stopped = False
+    paused = None
     try:
+        if name == "S6":
+            containers = compose("ps", "-q", "chat-service").splitlines()
+            for container in containers:
+                info = json.loads(run(["docker", "inspect", container]))[0]
+                if info["NetworkSettings"]["Networks"]["chat-net"]["IPAddress"] == targets[1]:
+                    paused = container
+                    environment = dict(item.split("=", 1) for item in info["Config"]["Env"] if "=" in item)
+            assert paused, "Zielcontainer fehlt"
+            credentials = environment["RABBITMQ_USER"] + ":" + environment["RABBITMQ_PASSWORD"]
+            # Zugangsdaten nur ueber stdin, nicht in Prozessargumenten, Logs oder Report.
+            process.stdin.write(json.dumps({"credentials": credentials}) + "\n")
+            process.stdin.flush()
         receive(output, "ready", 60)
         if name == "S5":
             stopped = True
             compose("stop", "batch-writer", "postgres")
             running = compose("ps", "--services", "--status", "running").splitlines()
             assert "batch-writer" not in running and "postgres" not in running
+        if name == "S6":
+            # compose pause chat-service wuerde BEIDE Replikate anhalten; hier genau eine Container-ID.
+            run(["docker", "pause", paused])
+            assert run(["docker", "inspect", "--format", "{{.State.Paused}}", paused]) == "true"
         process.stdin.write("go\n")
         process.stdin.flush()
+        if name == "S6":
+            receive(output, "resume", 180)
+            run(["docker", "unpause", paused])
+            assert run(["docker", "inspect", "--format", "{{.State.Paused}}", paused]) == "false"
+            paused = None
+            process.stdin.write("go\n")
+            process.stdin.flush()
         result = receive(output, "result", 120)["result"]
         assert process.wait(timeout=20) == 0
     finally:
         # Keine Volumes, Queues oder Tabellen loeschen. Nur den eigenen Testclient entfernen.
         try:
+            if paused:
+                state = run(["docker", "inspect", "--format", "{{.State.Paused}}", paused])
+                if state == "true":
+                    run(["docker", "unpause", paused])
             if stopped:
                 compose("start", "postgres", "batch-writer")
         finally:
@@ -289,7 +444,7 @@ def main():
     """Speichert echte Ergebnisse und Fehler; noch nicht implementierte Szenarien werden nicht behauptet."""
     global PROJECT
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("scenario", choices=["S3", "S5"])
+    parser.add_argument("scenario", choices=["S3", "S5", "S6"])
     parser.add_argument("--project", default=os.environ.get("COMPOSE_PROJECT_NAME"))
     parser.add_argument("--report")
     parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)

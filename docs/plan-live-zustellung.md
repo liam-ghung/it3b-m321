@@ -228,7 +228,19 @@ liefert auch die andere Instanz neue Nachrichten. Tatsächliche Höchstwerte not
 
 **Commit:** test: Begrenzten Rückstau und Wiederanlauf nach Pause prüfen
 
-**Geprüft und korrigiert:** Offen.
+**Geprüft und korrigiert:** Am 13.11.2026 umgesetzt und geprüft.
+S6: genau eine der zwei Chat-Instanzen über ihre Container-ID pausiert, weil
+Compose-Pause des gemeinsamen Dienstnamens beide Replikate pausieren würde.
+5000 POSTs in 5,567 s; gesunder Client erhält alle 5000 vollständigen Nachrichten
+genau einmal in Reihenfolge. 92 Management-Stichproben, größter Abstand 0,107555 s.
+Maximal 999 Ready plus 1 Unacked, Summe maximal 1000. Queue-Argumente, ein Consumer
+und Prefetch 1 zusätzlich geprüft; Management-Statistik ist zeitlich verzögert.
+Nach Fortsetzen erhalten beide Instanzen drei neue Nachrichten. Lokaler Test
+prüft die echte 10000er-Clientgrenze und Entfernung nur des überfüllten Clients.
+S3 und S5 nach Skripterweiterung erneut bestanden. Root-Lauf: BUILD SUCCESS um
+09:12:54 Uhr, 38 Tests ohne Fehler/Fehlschläge/übersprungene Tests.
+Produktionscode unverändert, keine Planänderung. Beide Instanzen laufen wieder.
+Details: [Schritt-5-Prüfbericht](live-zustellung-schritt-5.md).
 
 ## Schritt 6: Nachlieferung und Übergang zu live
 
