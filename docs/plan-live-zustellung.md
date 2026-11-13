@@ -133,7 +133,17 @@ Persistenz- und Fehlerqueue bleiben. Prüfung gemäß zuvor geklärter S4-Zählu
 
 **Commit:** feat: Live-Nachrichten an jede Chat-Service-Instanz verteilen
 
-**Geprüft und korrigiert:** Offen.
+**Geprüft und korrigiert:** Am 13.11.2026 umgesetzt; Nachweise in
+docs/live-zustellung-schritt-2.md. Vier Integrationstests mit echtem RabbitMQ und
+zwei unabhängigen Empfangskontexten prüfen Verteilung, unveränderte Speicherkopie,
+Queue-Löschung, Grenzen/Prefetch, ungültiges JSON und Wiederanlauf nach erzwungenem
+Verbindungsabbruch. Zwei lokale Tests sichern den begrenzten Empfangspuffer ab.
+Korrigiert: Default-Properties des Testentwurfs wurden von application.yml
+überschrieben; Startargumente verbinden nun sicher zum zufälligen Testcontainer-Port.
+Der Context-Smoke-Test startet keinen Consumer; echte Broker-Tests bleiben Pflicht.
+Root-Lauf `mvn -B -ntp clean test`: BUILD SUCCESS um 08:38:12 Uhr, 29 Tests,
+keine Fehler/Fehlschläge/übersprungenen Tests. Noch kein SSE oder Cursor-Endpunkt;
+die lokale Übergabestelle ist Grundlage für Schritte 3 und 6. Keine Planänderung.
 
 ## Schritt 3: SSE und Raumfilterung
 

@@ -8,7 +8,7 @@ import org.springframework.boot.test.context.SpringBootTest;
  * Rumpf: faellt beim Hochfahren irgendwo eine Bean weg oder ist eine Konfiguration
  * fehlerhaft, schlaegt er hier fehl, bevor irgendjemand die Anwendung startet.
  */
-@SpringBootTest
+@SpringBootTest(properties = "spring.rabbitmq.listener.simple.auto-startup=false")
 class ChatServiceApplicationTest {
 
     /** Der vollstaendige Anwendungskontext muss sich ohne fehlende Beans starten lassen. */

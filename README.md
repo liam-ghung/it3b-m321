@@ -71,6 +71,7 @@ Die vollständigen Regeln stehen in [`CLAUDE.md`](CLAUDE.md).
 | chat-service | POST `/messages`, alter Pfad `/api/messages` bleibt als Alias; Server-UUID und Sendezeit |
 | Nachrichtenvertrag | `id`, `roomId`, `senderId`, `senderName`, `content`, `sentAt` |
 | RabbitMQ | Dauerhafte Queue `chat.persist`, Bindung an `chat.messages`, Fehlerablage `chat.dlq` |
+| Live-Empfang (Bewertung 2, Schritt 2) | `chat.messages` verteilt zusätzlich an `chat.delivery`; eigene flüchtige Queue je Instanz, begrenzter lokaler Empfangspuffer; noch kein SSE-Endpunkt |
 | batch-writer | 100 Nachrichten oder 200 ms, eine DB-Transaktion pro Stapel, ACK nach COMMIT |
 | Duplikate | `ON CONFLICT (id) DO NOTHING` verhindert doppelte Zeilen |
 | Ausfälle | Automatische Wiederholung bei DB-Ausfall, ungültige Nachrichten einzeln in DLQ |
